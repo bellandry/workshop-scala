@@ -21,6 +21,15 @@ const userSchema = z.object({
   age: z.number().min(18),
 });
 
+const idEventSchema = z.object({
+  id: z.string(),
+});
+
+const idUserSchema = z.object({
+  userId: z.number().min(1),
+  quantity: z.number().min(1),
+});
+
 // Fetch users
 app.get("/users", async (req, res) => {
   try {
@@ -58,14 +67,111 @@ app.post("/users", async (req, res) => {
 
     res.json({ data: newUser });
   } catch (error) {
-    // if (error instanceof z.ZodError) {
-    //   return res.status(400).json({
-    //     error: "Zod Validation Error",
-    //     details: error.errors,
-    //   });
-    // }
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: "Zod Validation Error",
+        details: error.errors,
+      });
+    }
     console.error(error);
     res.status(500).json({ error: "Unexpected error" });
+  }
+});
+
+app.get("/event-tickets/:id", async (req, res) => {
+  try {
+    const idValidate = idEventSchema.parse(req.params);
+    const { id: eventId } = idValidate;
+
+    const result = await pool.query(
+      "SELECT name, total_tickets, sold_tickets FROM events WHERE id = $1",
+      [eventId],
+    );
+
+    const event = result.rows[0];
+
+    if (!event) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    const { name, total_tickets, sold_tickets } = event;
+    const ticketLeft = total_tickets - sold_tickets;
+
+    res.json({
+      data: { eventName: name, total_tickets, sold_tickets, ticketLeft },
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: "Zod Validation Error",
+        details: error.errors,
+      });
+    }
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// Buy Event Ticket
+app.post("/buy-tickets/:id", async (req, res) => {
+  try {
+    const idEvent = idEventSchema.parse(req.params);
+    const { id: eventId } = idEvent;
+    const validateUser = idUserSchema.parse(req.body);
+    const { userId, quantity } = validateUser;
+
+    // Verify event exists
+    const eventExist = await pool.query(
+      "SELECT name, total_tickets, sold_tickets FROM events WHERE id = $1",
+      [eventId],
+    );
+    const event = eventExist.rows[0];
+
+    if (!event) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    //verify user exist
+    const userExist = await pool.query("SELECT * FROM users WHERE id = $1", [
+      userId,
+    ]);
+    const user = userExist.rows[0];
+
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    //verify ticket left
+    const { total_tickets, sold_tickets } = event;
+    const ticketLeft = total_tickets - sold_tickets;
+
+    if (ticketLeft < quantity) {
+      return res.status(400).json({ error: "Not enough tickets left" });
+    }
+
+    //update ticket
+    const newQuantity = quantity + sold_tickets;
+    const updateTicket = await pool.query(
+      "UPDATE events SET sold_tickets =  $1 WHERE id = $2 RETURNING *",
+      [newQuantity, eventId],
+    );
+    const updatedEvent = updateTicket.rows[0];
+
+    res.json({
+      message: `Ticket bought successfully for ${event.name} event`,
+      data: updatedEvent,
+      email: user.email,
+      boughTickets: quantity,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({
+        error: "Zod Validation Error",
+        details: error.errors,
+      });
+    }
+    console.error(error);
+    res.status(500).json({ error: "Internal Server Error" });
   }
 });
 
