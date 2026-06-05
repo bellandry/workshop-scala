@@ -2,8 +2,12 @@ const express = require("express");
 const dotenv = require("dotenv");
 const { Pool } = require("pg");
 const { z } = require("zod");
-const util = require("util");
+const { Queue } = require("bullmq");
+const connection = require("./redis");
+
 dotenv.config();
+
+const ticketQueue = new Queue("ticket-processing", { connection });
 
 const app = express();
 app.use(express.json());
@@ -47,16 +51,6 @@ const idUserSchema = z.object({
   userId: z.number().min(1),
   quantity: z.number().min(1),
 });
-
-// Heavy PDF generator simulator
-const heavyPdfGenerator = (duration) => {
-  const start = Date.now();
-  while (Date.now() - start < duration) {
-    // Do nothing
-  }
-};
-
-setTimeOutPromise = util.promisify(setTimeout);
 
 // Fetch users
 app.get("/users", async (req, res) => {
@@ -185,9 +179,19 @@ app.post("/buy-tickets/:id", async (req, res) => {
     );
     const updatedEvent = updateTicket.rows[0];
 
-    // Send Email & generate pdf
-    await setTimeOutPromise(50);
-    heavyPdfGenerator(500);
+    await ticketQueue.add(
+      "generate-and-send",
+      {
+        userId,
+        eventId,
+        quantity,
+        email: user.email,
+      },
+      {
+        attempts: 3,
+        backoff: 5000,
+      },
+    );
 
     res.json({
       message: `Ticket bought successfully for ${event.name} event`,

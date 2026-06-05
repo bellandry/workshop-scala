@@ -9,7 +9,9 @@
     "migrate": "node-pg-migrate",
     "migrate:create": "node-pg-migrate create",
     "migrate:up": "node-pg-migrate up",
-    "migrate:down": "node-pg-migrate down"
+    "migrate:down": "node-pg-migrate down",
+    "worker": "node worker.js",
+    "worker:dev": "nodemon worker.js"
   },
   "keywords": [],
   "author": "",
