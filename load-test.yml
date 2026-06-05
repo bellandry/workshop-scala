@@ -1,0 +1,15 @@
+config:
+  target: "http://localhost:3000"
+  phases:
+    - duration: 10
+      arrivalRate: 150 # 50 requêtes par seconde pendant 10 secondes (500 requêtes total)
+      name: "Ouverture de la billetterie"
+
+scenarios:
+  - name: "Achat d'un billet"
+    flow:
+      - post:
+          url: "/buy-tickets/1"
+          json:
+            userId: 1
+            quantity: 3

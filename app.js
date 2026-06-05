@@ -2,6 +2,7 @@ const express = require("express");
 const dotenv = require("dotenv");
 const { Pool } = require("pg");
 const { z } = require("zod");
+const util = require("util");
 dotenv.config();
 
 const app = express();
@@ -12,6 +13,23 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   max: 10,
 });
+
+const monitorPool = () => {
+  const total = pool.totalCount;
+  const idle = pool.idleCount;
+  const waiting = pool.waitingCount;
+  const active = total - idle;
+
+  console.clear();
+  console.log(`--- Postgres Pool Status ---`);
+  console.log(`Active Connexions      : ${active}`);
+  console.log(`Idle Connexions        : ${idle}`);
+  console.log(`Total Connexions       : ${total} / 10`);
+  console.log(`Waiting Requests       : ${waiting}`);
+  console.log(`----------- End ------------`);
+};
+
+setInterval(monitorPool, 1000);
 
 // Validation schema
 const userSchema = z.object({
@@ -29,6 +47,16 @@ const idUserSchema = z.object({
   userId: z.number().min(1),
   quantity: z.number().min(1),
 });
+
+// Heavy PDF generator simulator
+const heavyPdfGenerator = (duration) => {
+  const start = Date.now();
+  while (Date.now() - start < duration) {
+    // Do nothing
+  }
+};
+
+setTimeOutPromise = util.promisify(setTimeout);
 
 // Fetch users
 app.get("/users", async (req, res) => {
@@ -156,6 +184,10 @@ app.post("/buy-tickets/:id", async (req, res) => {
       [newQuantity, eventId],
     );
     const updatedEvent = updateTicket.rows[0];
+
+    // Send Email & generate pdf
+    await setTimeOutPromise(50);
+    heavyPdfGenerator(500);
 
     res.json({
       message: `Ticket bought successfully for ${event.name} event`,
