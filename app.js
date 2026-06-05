@@ -15,7 +15,7 @@ app.use(express.json());
 // Database Connection
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  max: 10,
+  max: 20,
 });
 
 const monitorPool = () => {
@@ -28,7 +28,7 @@ const monitorPool = () => {
   console.log(`--- Postgres Pool Status ---`);
   console.log(`Active Connexions      : ${active}`);
   console.log(`Idle Connexions        : ${idle}`);
-  console.log(`Total Connexions       : ${total} / 10`);
+  console.log(`Total Connexions       : ${total} / 20`);
   console.log(`Waiting Requests       : ${waiting}`);
   console.log(`----------- End ------------`);
 };
@@ -136,15 +136,20 @@ app.get("/event-tickets/:id", async (req, res) => {
 
 // Buy Event Ticket
 app.post("/buy-tickets/:id", async (req, res) => {
+  const client = await pool.connect(); // Etablir une connexion dédiée a la transaction
+
   try {
     const idEvent = idEventSchema.parse(req.params);
     const { id: eventId } = idEvent;
     const validateUser = idUserSchema.parse(req.body);
     const { userId, quantity } = validateUser;
 
+    // Début de la transaction
+    await client.query("BEGIN");
+
     // Verify event exists
-    const eventExist = await pool.query(
-      "SELECT name, total_tickets, sold_tickets FROM events WHERE id = $1",
+    const eventExist = await client.query(
+      "SELECT name, total_tickets, sold_tickets FROM events WHERE id = $1 FOR UPDATE",
       [eventId],
     );
     const event = eventExist.rows[0];
@@ -154,7 +159,7 @@ app.post("/buy-tickets/:id", async (req, res) => {
     }
 
     //verify user exist
-    const userExist = await pool.query("SELECT * FROM users WHERE id = $1", [
+    const userExist = await client.query("SELECT * FROM users WHERE id = $1", [
       userId,
     ]);
     const user = userExist.rows[0];
@@ -168,16 +173,19 @@ app.post("/buy-tickets/:id", async (req, res) => {
     const ticketLeft = total_tickets - sold_tickets;
 
     if (ticketLeft < quantity) {
+      await client.query("ROLLBACK");
       return res.status(400).json({ error: "Not enough tickets left" });
     }
 
     //update ticket
     const newQuantity = quantity + sold_tickets;
-    const updateTicket = await pool.query(
+    const updateTicket = await client.query(
       "UPDATE events SET sold_tickets =  $1 WHERE id = $2 RETURNING *",
       [newQuantity, eventId],
     );
     const updatedEvent = updateTicket.rows[0];
+
+    await client.query("COMMIT");
 
     await ticketQueue.add(
       "generate-and-send",
@@ -200,6 +208,7 @@ app.post("/buy-tickets/:id", async (req, res) => {
       boughTickets: quantity,
     });
   } catch (error) {
+    await client.query("ROLLBACK");
     if (error instanceof z.ZodError) {
       return res.status(400).json({
         error: "Zod Validation Error",
@@ -208,6 +217,8 @@ app.post("/buy-tickets/:id", async (req, res) => {
     }
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
   }
 });
 
