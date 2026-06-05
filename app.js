@@ -1,9 +1,9 @@
 const express = require("express");
 const dotenv = require("dotenv");
-const { Pool } = require("pg");
 const { z } = require("zod");
 const { Queue } = require("bullmq");
 const connection = require("./redis");
+const pool = require("./db");
 
 dotenv.config();
 
@@ -11,12 +11,6 @@ const ticketQueue = new Queue("ticket-processing", { connection });
 
 const app = express();
 app.use(express.json());
-
-// Database Connection
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 20,
-});
 
 const monitorPool = () => {
   const total = pool.totalCount;
@@ -101,12 +95,23 @@ app.post("/users", async (req, res) => {
 });
 
 app.get("/event-tickets/:id", async (req, res) => {
+  const client = await pool.connect();
   try {
     const idValidate = idEventSchema.parse(req.params);
     const { id: eventId } = idValidate;
 
-    const result = await pool.query(
-      "SELECT name, total_tickets, sold_tickets FROM events WHERE id = $1",
+    //vérifier la disponibilité des données dans le cache
+    const cachedStock = await connection.get(`event:${eventId}:stock`);
+
+    if (cachedStock) {
+      return res.json({
+        source: "cache",
+        data: parseInt(cachedStock),
+      });
+    }
+
+    const result = await client.query(
+      "SELECT total_tickets, sold_tickets FROM events WHERE id = $1",
       [eventId],
     );
 
@@ -116,11 +121,15 @@ app.get("/event-tickets/:id", async (req, res) => {
       return res.status(404).json({ error: "Event not found" });
     }
 
-    const { name, total_tickets, sold_tickets } = event;
+    const { total_tickets, sold_tickets } = event;
     const ticketLeft = total_tickets - sold_tickets;
 
+    //stock in cache for 1 minute
+    await connection.setex(`event:${eventId}:stock`, 10, ticketLeft);
+
     res.json({
-      data: { eventName: name, total_tickets, sold_tickets, ticketLeft },
+      source: "database",
+      data: ticketLeft,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -131,6 +140,8 @@ app.get("/event-tickets/:id", async (req, res) => {
     }
     console.error(error);
     res.status(500).json({ error: "Internal Server Error" });
+  } finally {
+    client.release();
   }
 });
 
@@ -186,6 +197,9 @@ app.post("/buy-tickets/:id", async (req, res) => {
     const updatedEvent = updateTicket.rows[0];
 
     await client.query("COMMIT");
+
+    // Invalidate Cache
+    await connection.del(`event:${eventId}:stock`);
 
     await ticketQueue.add(
       "generate-and-send",
