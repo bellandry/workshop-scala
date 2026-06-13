@@ -11,7 +11,8 @@
     "migrate:up": "node-pg-migrate up",
     "migrate:down": "node-pg-migrate down",
     "worker": "node worker.js",
-    "worker:dev": "nodemon worker.js"
+    "worker:dev": "nodemon worker.js",
+    "test": "node --test tests/**/*.test.js"
   },
   "keywords": [],
   "author": "",
