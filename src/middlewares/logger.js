@@ -10,13 +10,22 @@ const baseLogger = pino({
   level: isProduction ? "INFO" : "DEBUG",
   transport: !isProduction
     ? {
-        target: "pino-pretty",
-        options: {
-          colorize: true,
-          singleLine: false,
-          ignore: "pid, hostname",
-          translateTime: "SYS:standard",
-        },
+        targets: [
+          {
+            target: "pino/file",
+            leve: "info",
+            options: {
+              destination: "./logs/app.log",
+            },
+          },
+          {
+            target: "pino/file",
+            leve: "warn",
+            options: {
+              destination: "./logs/error.log",
+            },
+          },
+        ],
       }
     : undefined,
 });
