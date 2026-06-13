@@ -3,6 +3,7 @@ const pool = require("./config/db");
 const redisClient = require("./config/redis");
 const { Queue } = require("bullmq");
 const dotenv = require("dotenv");
+const loggerMiddleware = require("./middlewares/logger");
 
 dotenv.config();
 
@@ -12,6 +13,7 @@ const TicketController = require("./controllers/ticket.controller");
 
 const app = express();
 app.use(express.json());
+app.use(loggerMiddleware);
 
 const ticketQueue = new Queue("ticket-processing", {
   connection: redisClient,
