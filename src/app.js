@@ -4,6 +4,7 @@ const redisClient = require("./config/redis");
 const { Queue } = require("bullmq");
 const dotenv = require("dotenv");
 const loggerMiddleware = require("./middlewares/logger");
+const rateLimiter = require("./middlewares/rateLimiter");
 
 dotenv.config();
 
@@ -27,7 +28,7 @@ const ticketController = new TicketController(ticketService);
 app.get("/event-tickets/:id", ticketController.getTickets);
 
 // Buy tickets
-app.post("/buy-tickets/:id", ticketController.buyTicket);
+app.post("/buy-tickets/:id", rateLimiter, ticketController.buyTicket);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
