@@ -29,7 +29,7 @@ const worker = new Worker(
       heavyPdfGenerator();
 
       const invoice = await client.query(
-        "INSERT INTO invoices (userId, eventId, quantity) VALUES($1, $2, $3) RETURNING *",
+        'INSERT INTO invoices ("userId", "eventId", quantity) VALUES($1, $2, $3) RETURNING *',
         [userId, eventId, quantity],
       );
       const newInvoice = invoice.rows[0];

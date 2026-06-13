@@ -237,6 +237,33 @@ app.post("/buy-tickets/:id", async (req, res) => {
 });
 
 const PORT = process.env.PORT;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log("Server Running on " + PORT);
 });
+
+const gracefullShutdown = async (signal) => {
+  console.log(`${signal} successfully recieved ! gracefull shutdown launched`);
+
+  try {
+    console.log("1. Arrête du serveur HTTP");
+    await new Promise((resolve) => server.close(resolve));
+
+    console.log("2. Arrête de la pool");
+    await pool.end();
+
+    console.log("3. Arrête de la queue");
+    await ticketQueue.close();
+
+    console.log("4. Arrête du serveur Redis");
+    await connection.quit();
+
+    console.log("shutdown completed gracefully");
+    process.exit(0);
+  } catch (error) {
+    console.error("Something went wrong during shutdown, err : " + error);
+    process.exit(1);
+  }
+};
+
+process.on("SIGINT", () => gracefullShutdown("SIGINT")); // When press Ctrl + C
+process.on("SIGTERM", () => gracefullShutdown("SIGTERM")); // When stop via docker for example

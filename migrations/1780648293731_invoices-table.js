@@ -12,7 +12,7 @@ export const up = (pgm) => {
   pgm.createTable("invoices", {
     id: "serial primary key",
     userId: "integer not null",
-    eventId: "integer not nul",
+    eventId: "integer not null",
     quantity: "integer not null",
     status: "varchar(20) default 'generated'",
     createdAt: "timestamp default now()",
