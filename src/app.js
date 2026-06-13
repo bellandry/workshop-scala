@@ -21,7 +21,11 @@ const ticketRepository = new TicketRepository(pool, redisClient);
 const ticketService = new TicketService(ticketRepository, pool, ticketQueue);
 const ticketController = new TicketController(ticketService);
 
+// Get available tickets
 app.get("/event-tickets/:id", ticketController.getTickets);
+
+// Buy tickets
+app.post("/buy-tickets/:id", ticketController.buyTicket);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
